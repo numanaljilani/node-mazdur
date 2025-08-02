@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { User } from "../models/Schema.js";
+import { Message, User } from "../models/Schema.js";
 import mongoose from "mongoose";
 
 // Generate access and refresh tokens
@@ -20,7 +20,7 @@ const generateTokens = (user) => {
 
 // Register a new user
 export const registerUser = async (req, res) => {
-  console.log(req.body)
+  console.log(req.body);
   try {
     const { fullname, email, password, ...rest } = req.body;
     if (!fullname || !email || !password) {
@@ -34,7 +34,12 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ error: "Email already exists" });
     }
 
-    const user = new User({ fullname, email, password :  await bcrypt.hash(password , 10), ...rest });
+    const user = new User({
+      fullname,
+      email,
+      password: await bcrypt.hash(password, 10),
+      ...rest,
+    });
     const { accessToken, refreshToken } = generateTokens(user);
     user.refreshToken = refreshToken;
     await user.save();
@@ -71,10 +76,10 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    user.password = await bcrypt.hash('mazdur@123' , 10);
-    
+    // user.password = await bcrypt.hash("mazdur@123", 10);
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    console.log(isPasswordValid , "isPasswordValid")
+    console.log(isPasswordValid, "isPasswordValid");
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
@@ -109,13 +114,14 @@ export const checkUserAvailibility = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user) {
-      return res.status(401).json({ message: "This email is already registered." ,success : false});
+      return res
+        .status(401)
+        .json({ message: "This email is already registered.", success: false });
     }
-
 
     res.json({
       message: "Login successful",
-      success : true
+      success: true,
     });
   } catch (error) {
     res.status(500).json({ error: `Failed to login: ${error.message}` });
@@ -183,14 +189,12 @@ export const refreshAccessToken = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { user: authUser } = req; // From authenticateToken middleware
-console.log("inside update user")
+    console.log("inside update user");
     if (!mongoose.Types.ObjectId.isValid(authUser?.id)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
 
-   
-
-    let updateData  = {}
+    let updateData = {...req.body};
     // ✅ Check if email already exists
     if (req?.body?.email) {
       const existingUser = await User.findOne({
@@ -230,7 +234,7 @@ console.log("inside update user")
     // ✅ Update user in DB
     const user = await User.findByIdAndUpdate(
       authUser?.id,
-      { ...req.body, updatedAt: Date.now() },
+      { ...updateData, updatedAt: Date.now() },
       { new: true, runValidators: true }
     ).select("-password -refreshToken");
 
@@ -246,18 +250,16 @@ console.log("inside update user")
 
 // Delete a user
 export const deleteUser = async (req, res) => {
+     console.log(req.params.id , "req.params")
   try {
     const { id } = req.params;
+ 
     const { user: authUser } = req; // From authenticateToken middleware
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
 
-    if (id !== authUser.id) {
-      return res
-        .status(403)
-        .json({ error: "Unauthorized to delete this user" });
-    }
+
 
     const user = await User.findByIdAndDelete(id);
     if (!user) {
@@ -267,5 +269,32 @@ export const deleteUser = async (req, res) => {
     res.json({ message: "User deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: `Failed to delete user: ${error.message}` });
+  }
+};
+
+export const deleteMyAccount = async (req, res) => {
+  console.log(req.body);
+  try {
+    const { name, userId, message } = req.body;
+
+    const newMessage = await new Message({ name, userId, message , type : "delete" });
+     await newMessage.save()
+    res.json({ message: "Your account will be deleted in 24 hours." });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to: ${error.message}` });
+  }
+};
+export const help = async (req, res) => {
+  console.log(req.body);
+  try {
+    const { name, userId, message } = req.body;
+
+    const newMessage = await new Message({ name, userId, message, type : "help" });
+    await newMessage.save()
+    res.json({
+      message: "Hour support team will contact you as soon as possible.",
+    });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to: ${error.message}` });
   }
 };

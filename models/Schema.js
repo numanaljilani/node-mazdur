@@ -39,6 +39,14 @@ const userSchema = new Schema({
   rewies: { type: Number, default: 0 },
   refreshToken: { type: String },
 }, { timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' } });
+const messageSchema = new Schema({
+  name: { type: String, required: true },
+  userId: { type: String },
+  message: { type: String },
+  type: { type: String },
+
+
+}, { timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' } });
 
 // Middleware to hash password before saving
 // import bcrypt from 'bcrypt';
@@ -142,6 +150,7 @@ const imagesSchema = new Schema({
 
 // Create Mongoose Models
 export const User = mongoose.model('User', userSchema);
+export const Message = mongoose.model('Message', messageSchema);
 export const Post = mongoose.model('Post', postSchema);
 export const OTP = mongoose.model('OTP', otpSchema);
 export const Bookmark = mongoose.model('Bookmark', bookmarkSchema);
