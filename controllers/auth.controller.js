@@ -129,10 +129,10 @@ export const checkUserAvailibility = async (req, res) => {
 };
 // Login user
 export const me = async (req, res) => {
-  console.log(req.body);
+ 
   try {
     const { user: authUser } = req;
-
+ console.log(req.body);
     const user = await User.findById(authUser?.id);
     if (!user) {
       return res.status(401).json({ error: "No Data Found" });
@@ -145,7 +145,6 @@ export const me = async (req, res) => {
       user: {
         ...user.toObject(),
         password: undefined,
-        refreshToken: undefined,
       },
       accessToken,
       refreshToken,

@@ -12,7 +12,7 @@ router.post("/help",help);
 router.post("/isAvailable",checkUserAvailibility);
 router.post("/register",registerUser);
 router.post("/login",loginUser);
-router.put("/me",authenticate,  me);
+router.get("/me",authenticate,  me);
 router.put("/update-user",authenticate,  updateUser);
 router.delete("/delete-user/:id",deleteUser);
 
