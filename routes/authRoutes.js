@@ -1,6 +1,7 @@
 import exporess from "express";
-import { checkUserAvailibility, deleteMyAccount, deleteUser, help, loginUser, me, registerUser, updateUser } from "../controllers/auth.controller.js";
+import { checkUserAvailibility, deleteMyAccount, deleteUser, help, loginUser, me, registerUser, registerUserWithImage, update_profile, updateUser } from "../controllers/auth.controller.js";
 import authenticate from "../middleware/authMiddleware.js";
+import upload from "../services/multerService.js";
 
 const router = exporess.Router();
 
@@ -9,6 +10,8 @@ router.post("/help",help);
 
 
 
+router.post('/register-with-image', upload.single('file'), registerUserWithImage);
+router.post('/update', upload.single('file'), update_profile);
 router.post("/isAvailable",checkUserAvailibility);
 router.post("/register",registerUser);
 router.post("/login",loginUser);

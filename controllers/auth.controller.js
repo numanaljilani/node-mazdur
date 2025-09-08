@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { Message, User } from "../models/Schema.js";
 import mongoose from "mongoose";
+import cloudinary from '../config/cloudinary.js';
 
 // Generate access and refresh tokens
 const generateTokens = (user) => {
@@ -58,6 +59,157 @@ export const registerUser = async (req, res) => {
     res
       .status(500)
       .json({ error: `Failed to register user: ${error.message}` });
+  }
+};
+
+// Register a new user with FormData and optional image
+export const registerUserWithImage = async (req, res) => {
+  try {
+    const { fullname, email, password, nikname, phone, address, dob } = req.body;
+    const file = req?.file; // Type assertion for multer
+
+    // Validate required fields
+    if (!fullname || !email || !password) {
+      return res.status(400).json({ error: 'Fullname, email, and password are required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+
+    // Handle image upload to Cloudinary
+    let profileImage = '';
+    if (file) {
+      // Convert buffer to base64
+      const base64Image = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+      
+      // Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(base64Image, {
+        folder: 'mazdur/profiles',
+        public_id: `user_${email}_${Date.now()}`,
+        resource_type: 'image',
+      });
+
+      profileImage = result.secure_url;
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create new user
+    const user = new User({
+      fullname,
+      email,
+      password: hashedPassword,
+      nikname: nikname || '',
+      phone: phone || '',
+      address: address || '',
+      dob: dob ? new Date(dob) : undefined,
+      image : profileImage,
+    });
+
+    // Generate tokens
+    const { accessToken, refreshToken } = generateTokens(user);
+    user.refreshToken = refreshToken;
+
+    // Save user
+    await user.save();
+
+    // Remove sensitive fields
+    const userResponse = {
+      ...user.toObject(),
+      password: undefined,
+      refreshToken: undefined,
+    };
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      user: userResponse,
+      accessToken,
+      refreshToken,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: `Failed to register user: ${error.message}` });
+  }
+};
+
+
+// Update user profile
+export const update_profile = async (req, res) => {
+  try {
+    // Assuming FormData is parsed by middleware (e.g., multer)
+    const { fullname, nikname, phone, address, dob, userId } = req.body;
+    const file = req.files?.file; // Adjust based on your middleware
+
+    // Validate required fields
+    if (!userId || !fullname) {
+      return res.status(400).json({ error: 'userId and fullname are required' });
+    }
+
+    // Validate userId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid userId' });
+    }
+
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Handle image upload to Cloudinary
+    let profileImage = user.profileImage;
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.mimetype)) {
+        return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, and GIF are allowed' });
+      }
+
+      // Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(file.path || file.buffer, {
+        folder: 'mazdur/profiles',
+        public_id: `user_${userId}_${Date.now()}`,
+        resource_type: 'image',
+      });
+
+      profileImage = result.secure_url;
+    }
+
+    // Update user fields
+    user.fullname = fullname;
+    user.nikname = nikname || user.nikname;
+    user.phone = phone || user.phone;
+    user.address = address || user.address;
+    user.dob = dob ? new Date(dob) : user.dob;
+    user.profileImage = profileImage;
+
+    // Save updated user
+    await user.save();
+
+    // Remove sensitive fields
+    const userResponse = {
+      ...user.toObject(),
+      password: undefined,
+      refreshToken: undefined,
+    };
+
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      user: userResponse,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: `Failed to update profile: ${error.message}` });
   }
 };
 
