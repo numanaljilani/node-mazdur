@@ -141,7 +141,71 @@ export const registerUserWithImage = async (req, res) => {
     res.status(500).json({ error: `Failed to register user: ${error.message}` });
   }
 };
+// Update user profile with image replacement
+export const updateUserWithImage = async (req, res) => {
+  try {
+    const { fullname, email, nikname, phone, address, dob } = req.body;
+    const file = req?.file; // Multer uploaded file
+     const { user: authUser } = req;
+    const userId = authUser?.id; // User ID from URL
+    console.log(authUser , userId)
 
+    // Find the existing user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // ✅ If a new file is uploaded, delete the old image from Cloudinary
+    let profileImage = user.image; // Keep existing image if no new file
+    if (file) {
+      // Delete old image from Cloudinary if exists
+      if (user.image) {
+        const publicId = user.image.split("/").pop().split(".")[0]; 
+        // Example: https://res.cloudinary.com/.../mazdur/profiles/user_abc_xyz.jpg → user_abc_xyz
+
+        await cloudinary.uploader.destroy(`mazdur/profiles/${publicId}`);
+      }
+
+      // Upload new image
+      const base64Image = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+      const result = await cloudinary.uploader.upload(base64Image, {
+        folder: "mazdur/profiles",
+        public_id: `user_${email || user.email}_${Date.now()}`,
+        resource_type: "image",
+      });
+
+      profileImage = result.secure_url;
+    }
+
+    // Update allowed fields (password not updated here)
+    user.fullname = fullname || user.fullname;
+    user.email = email || user.email;
+    user.nikname = nikname || user.nikname;
+    user.phone = phone || user.phone;
+    user.address = address || user.address;
+    user.dob = dob ? new Date(dob) : user.dob;
+    user.image = profileImage;
+
+    // Save updated user
+    await user.save();
+
+    // Prepare safe response
+    const userResponse = {
+      ...user.toObject(),
+      password: undefined,
+      refreshToken: undefined,
+    };
+
+    res.status(200).json({
+      message: "User updated successfully",
+      user: userResponse,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: `Failed to update user: ${error.message}` });
+  }
+};
 
 // Update user profile
 export const update_profile = async (req, res) => {
