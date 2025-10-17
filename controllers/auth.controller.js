@@ -2,7 +2,11 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { Message, User } from "../models/Schema.js";
 import mongoose from "mongoose";
-import cloudinary from '../config/cloudinary.js';
+import cloudinary from "../config/cloudinary.js";
+import { OAuth2Client } from 'google-auth-library';
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 
 // Generate access and refresh tokens
 const generateTokens = (user) => {
@@ -64,38 +68,48 @@ export const registerUser = async (req, res) => {
 
 // Register a new user with FormData and optional image
 export const registerUserWithImage = async (req, res) => {
+  console.log(req.file, "FLIE");
   try {
-    const { fullname, email, password, nikname, phone, address, dob } = req.body;
+    const { fullname, email, password, nikname, phone, address, dob } =
+      req.body;
     const file = req?.file; // Type assertion for multer
 
     // Validate required fields
     if (!fullname || !email || !password) {
-      return res.status(400).json({ error: 'Fullname, email, and password are required' });
+    return res
+        .status(400)
+        .json({ error: "Fullname, email, and password are required" });
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
+      return res.status(400).json({ error: "Invalid email format" });
     }
 
     // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ error: 'Email already exists' });
+      console.log("first Exist")
+       return res.status(400).json({ 
+        success: false,
+        error: "Email already exists" 
+      });
     }
 
     // Handle image upload to Cloudinary
-    let profileImage = '';
+    let profileImage = "";
     if (file) {
       // Convert buffer to base64
-      const base64Image = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-      
+      const base64Image = `data:${file.mimetype};base64,${file.buffer.toString(
+        "base64"
+      )}`;
+
       // Upload to Cloudinary
       const result = await cloudinary.uploader.upload(base64Image, {
-        folder: 'mazdur/profiles',
+        folder: "mazdur/profiles",
         public_id: `user_${email}_${Date.now()}`,
-        resource_type: 'image',
+        resource_type: "image",
       });
 
       profileImage = result.secure_url;
@@ -109,12 +123,13 @@ export const registerUserWithImage = async (req, res) => {
       fullname,
       email,
       password: hashedPassword,
-      nikname: nikname || '',
-      phone: phone || '',
-      address: address || '',
+      nikname: nikname || "",
+      phone: phone || "",
+      address: address || "",
       dob: dob ? new Date(dob) : undefined,
-      image : profileImage,
+      image: profileImage,
     });
+    console.log("Working craeted db");
 
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user);
@@ -129,26 +144,35 @@ export const registerUserWithImage = async (req, res) => {
       password: undefined,
       refreshToken: undefined,
     };
-
-    res.status(201).json({
-      message: 'User registered successfully',
-      user: userResponse,
-      accessToken,
-      refreshToken,
+    // SUCCESS: Return consistent success response
+    return res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      user: {
+        id: user._id,
+        email: user.email,
+        fullname: user.fullname,
+        image: user.image
+        // Include other fields you need
+      },
+      accessToken // Include token if needed
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: `Failed to register user: ${error.message}` });
+     return res
+      .status(500)
+      .json({ error: `Failed to register user: ${error.message}` });
   }
 };
 // Update user profile with image replacement
 export const updateUserWithImage = async (req, res) => {
   try {
+    console.log(req.body);
     const { fullname, email, nikname, phone, address, dob } = req.body;
     const file = req?.file; // Multer uploaded file
-     const { user: authUser } = req;
+    const { user: authUser } = req;
     const userId = authUser?.id; // User ID from URL
-    console.log(authUser , userId)
+    console.log(authUser, userId);
 
     // Find the existing user
     const user = await User.findById(userId);
@@ -161,14 +185,16 @@ export const updateUserWithImage = async (req, res) => {
     if (file) {
       // Delete old image from Cloudinary if exists
       if (user.image) {
-        const publicId = user.image.split("/").pop().split(".")[0]; 
+        const publicId = user.image.split("/").pop().split(".")[0];
         // Example: https://res.cloudinary.com/.../mazdur/profiles/user_abc_xyz.jpg → user_abc_xyz
 
         await cloudinary.uploader.destroy(`mazdur/profiles/${publicId}`);
       }
 
       // Upload new image
-      const base64Image = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+      const base64Image = `data:${file.mimetype};base64,${file.buffer.toString(
+        "base64"
+      )}`;
       const result = await cloudinary.uploader.upload(base64Image, {
         folder: "mazdur/profiles",
         public_id: `user_${email || user.email}_${Date.now()}`,
@@ -207,6 +233,72 @@ export const updateUserWithImage = async (req, res) => {
   }
 };
 
+// New Google Auth controller
+export const googleAuth = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'Google token is required' });
+    }
+
+    // Verify Google ID token
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+  
+    if (!payload) {
+      return res.status(400).json({ error: 'Invalid Google token' });
+    }
+
+    const { email, name, picture } = payload;
+
+    // Check if user exists
+    let user = await User.findOne({ email });
+    console.log(user , "USER" , email)
+    let isNewUser = false;
+
+    if (!user) {
+      // Register new user
+      isNewUser = true;
+      user = new User({
+        fullname: name,
+        email,
+        image: picture || '',
+        password: '', // No password for Google users
+      });
+      const { accessToken, refreshToken } = generateTokens(user);
+      user.refreshToken = refreshToken;
+      await user.save();
+      res.status(201).json({
+        message: 'User registered successfully',
+        user: { ...user.toObject(), password: undefined, refreshToken: undefined },
+        accessToken,
+        refreshToken,
+        isNewUser,
+      });
+    } else {
+      // Login existing user
+      console.log('exsisting user' , user)
+      const { accessToken, refreshToken } = generateTokens(user);
+      user.refreshToken = refreshToken;
+ const data = await user.toObject();
+      res.status(200).json({
+        message: 'User logged in successfully',
+        user: { ...data, password: undefined, refreshToken: undefined },
+        accessToken,
+        refreshToken,
+        isNewUser,
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: `Google authentication failed: ${error.message}` });
+  }
+};
+
 // Update user profile
 export const update_profile = async (req, res) => {
   try {
@@ -216,35 +308,44 @@ export const update_profile = async (req, res) => {
 
     // Validate required fields
     if (!userId || !fullname) {
-      return res.status(400).json({ error: 'userId and fullname are required' });
+      return res
+        .status(400)
+        .json({ error: "userId and fullname are required" });
     }
 
     // Validate userId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ error: 'Invalid userId' });
+      return res.status(400).json({ error: "Invalid userId" });
     }
 
     // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
     // Handle image upload to Cloudinary
     let profileImage = user.profileImage;
     if (file) {
       // Validate file type
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
       if (!allowedTypes.includes(file.mimetype)) {
-        return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, and GIF are allowed' });
+        return res
+          .status(400)
+          .json({
+            error: "Invalid file type. Only JPEG, PNG, and GIF are allowed",
+          });
       }
 
       // Upload to Cloudinary
-      const result = await cloudinary.uploader.upload(file.path || file.buffer, {
-        folder: 'mazdur/profiles',
-        public_id: `user_${userId}_${Date.now()}`,
-        resource_type: 'image',
-      });
+      const result = await cloudinary.uploader.upload(
+        file.path || file.buffer,
+        {
+          folder: "mazdur/profiles",
+          public_id: `user_${userId}_${Date.now()}`,
+          resource_type: "image",
+        }
+      );
 
       profileImage = result.secure_url;
     }
@@ -268,12 +369,14 @@ export const update_profile = async (req, res) => {
     };
 
     res.status(200).json({
-      message: 'Profile updated successfully',
+      message: "Profile updated successfully",
       user: userResponse,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: `Failed to update profile: ${error.message}` });
+    res
+      .status(500)
+      .json({ error: `Failed to update profile: ${error.message}` });
   }
 };
 
@@ -286,7 +389,9 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({
+      email: { $regex: email, $options: "i" },
+    });
 
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
@@ -345,10 +450,9 @@ export const checkUserAvailibility = async (req, res) => {
 };
 // Login user
 export const me = async (req, res) => {
- 
   try {
     const { user: authUser } = req;
- console.log(req.body);
+    console.log(req.body);
     const user = await User.findById(authUser?.id);
     if (!user) {
       return res.status(401).json({ error: "No Data Found" });
@@ -409,7 +513,7 @@ export const updateUser = async (req, res) => {
       return res.status(400).json({ error: "Invalid user ID" });
     }
 
-    let updateData = {...req.body};
+    let updateData = { ...req.body };
     // ✅ Check if email already exists
     if (req?.body?.email) {
       const existingUser = await User.findOne({
@@ -465,16 +569,14 @@ export const updateUser = async (req, res) => {
 
 // Delete a user
 export const deleteUser = async (req, res) => {
-     console.log(req.params.id , "req.params")
+  console.log(req.params.id, "req.params");
   try {
     const { id } = req.params;
- 
+
     const { user: authUser } = req; // From authenticateToken middleware
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
-
-
 
     const user = await User.findByIdAndDelete(id);
     if (!user) {
@@ -492,8 +594,13 @@ export const deleteMyAccount = async (req, res) => {
   try {
     const { name, userId, message } = req.body;
 
-    const newMessage = await new Message({ name, userId, message , type : "delete" });
-     await newMessage.save()
+    const newMessage = await new Message({
+      name,
+      userId,
+      message,
+      type: "delete",
+    });
+    await newMessage.save();
     res.json({ message: "Your account will be deleted in 24 hours." });
   } catch (error) {
     res.status(500).json({ error: `Failed to: ${error.message}` });
@@ -504,8 +611,13 @@ export const help = async (req, res) => {
   try {
     const { name, userId, message } = req.body;
 
-    const newMessage = await new Message({ name, userId, message, type : "help" });
-    await newMessage.save()
+    const newMessage = await new Message({
+      name,
+      userId,
+      message,
+      type: "help",
+    });
+    await newMessage.save();
     res.json({
       message: "Hour support team will contact you as soon as possible.",
     });

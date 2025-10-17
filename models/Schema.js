@@ -7,7 +7,7 @@ const userSchema = new Schema({
   bio: { type: String },
   image: { type: String },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: { type: String, },
   socialAuthName: { type: String },
   fcmtoken: { type: String },
   phone: { type: String },
