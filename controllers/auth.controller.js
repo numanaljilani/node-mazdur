@@ -625,3 +625,22 @@ export const help = async (req, res) => {
     res.status(500).json({ error: `Failed to: ${error.message}` });
   }
 };
+export const report  = async (req, res) => {
+  console.log(req.body);
+  try {
+    const { name, userId, message } = req.body;
+
+    const newMessage = await new Message({
+      name,
+      userId,
+      message,
+      type: "report",
+    });
+    await newMessage.save();
+    res.json({
+      message: "Hour support team will contact you as soon as possible.",
+    });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to: ${error.message}` });
+  }
+};

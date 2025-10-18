@@ -1,5 +1,5 @@
 import exporess from "express";
-import { checkUserAvailibility, deleteMyAccount, deleteUser, googleAuth, help, loginUser, me, registerUser, registerUserWithImage, update_profile, updateUser, updateUserWithImage } from "../controllers/auth.controller.js";
+import { checkUserAvailibility, deleteMyAccount, deleteUser, googleAuth, help, loginUser, me, registerUser, registerUserWithImage, report, update_profile, updateUser, updateUserWithImage } from "../controllers/auth.controller.js";
 import authenticate from "../middleware/authMiddleware.js";
 import upload from "../services/multerService.js";
 
@@ -7,6 +7,7 @@ const router = exporess.Router();
 
 router.post("/delete-account",deleteMyAccount);
 router.post("/help",help);
+router.post("/report",report);
 
 
 router.post('/auth/google', googleAuth);
