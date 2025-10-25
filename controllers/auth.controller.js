@@ -644,3 +644,75 @@ export const report  = async (req, res) => {
     res.status(500).json({ error: `Failed to: ${error.message}` });
   }
 };
+
+
+
+export const bulkRegisterUsers = async (req, res) => {
+    // 1. Validate the request body
+    const usersData = req.body; 
+
+    if (!Array.isArray(usersData) || usersData.length === 0) {
+        return res.status(400).json({ error: 'Request body must be a non-empty array of user objects for bulk registration.' });
+    }
+
+    const results = { successes: [], failures: [] };
+    const saltRounds = 10; // Standard bcrypt salt rounds
+
+    // 2. Process each user sequentially to avoid potential race conditions on email check
+    for (const userData of usersData) {
+        // Use a try/catch block for each individual user to ensure the whole batch doesn't fail
+        try {
+            const { fullname, email, password, ...rest } = userData;
+
+            // Basic Validation Check
+            if (!fullname || !email || !password) {
+                results.failures.push({ email: email || 'N/A', reason: 'Missing required fields (fullname, email, or password).' });
+                continue;
+            }
+            
+            // 3. Check for existing user (Duplicate Email Check)
+            // NOTE: Replace `User` with your actual Mongoose Model
+            const existingUser = await User.findOne({ email });
+            if (existingUser) {
+                results.failures.push({ email, reason: 'Email already exists. Skipping registration.' });
+                continue;
+            }
+
+            // 4. Hash Password (CRITICAL)
+            const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+            // 5. Create new User document
+            const newUser = new User({
+                fullname,
+                email,
+                password: hashedPassword,
+                ...rest, // Includes phone, address, isContractor, service, subService, etc.
+                createdAt: new Date(), // Manually set if timestamps are not auto-handled
+                updatedAt: new Date(),
+            });
+
+            // 6. Save the user
+            await newUser.save();
+            
+            // Collect success result
+            results.successes.push({ email, fullname, id: newUser._id });
+
+        } catch (error) {
+            // Collect failure result
+            const email = userData.email || 'N/A';
+            results.failures.push({ email, reason: `Database/Schema validation failed: ${error.message}` });
+        }
+    }
+
+    // 7. Send final summary response
+    // Use 207 Multi-Status if there were partial failures, otherwise 201 Created.
+    const statusCode = results.failures.length > 0 ? 207 : 201; 
+
+    res.status(statusCode).json({
+        message: 'Bulk user registration process complete.',
+        totalProcessed: usersData.length,
+        totalSuccess: results.successes.length,
+        totalFailure: results.failures.length,
+        results: results
+    });
+};

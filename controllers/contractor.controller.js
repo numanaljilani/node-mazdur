@@ -136,7 +136,7 @@ export const getContractors = async (req, res) => {
   try {
     const {
       page = 1,
-      limit = 10,
+      limit = 50,
       search,
       subService,
       service,
@@ -171,7 +171,7 @@ export const getContractors = async (req, res) => {
     }
 
     const contractors = await User.find(query)
-      .select("-password -refreshToken")
+      .select("fullname bio image email phone address service locality rating  rewies")
       .sort(sort)
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit))
