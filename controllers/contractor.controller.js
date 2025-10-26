@@ -159,7 +159,9 @@ export const getContractors = async (req, res) => {
 
     // Filter by service
     if (service) {
-      query.service = service;
+      const serviceRegexPattern = service?.split('')?.join('.*'); // e.g. "paint" → "p.*a.*i.*n.*t"
+      const serviceRegex = new RegExp(serviceRegexPattern, 'i');
+      query.service = { $regex: serviceRegex };
     }
 
     // Sort by rating (asc or desc)
