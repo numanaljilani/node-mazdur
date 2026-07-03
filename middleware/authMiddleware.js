@@ -1,8 +1,8 @@
 import { verifyAccessToken } from '../services/jwtService.js';
 
 const authenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-   
+  const authHeader =  req.headers.authorization;
+   console.log(authHeader , "AUTH")
   if (!authHeader || !authHeader.startsWith('Bearer '))
     return res.status(401).json({ message: 'Access denied. No token provided.' });
 

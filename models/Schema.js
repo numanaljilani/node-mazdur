@@ -14,6 +14,7 @@ const userSchema = new Schema({
   address: { type: String },
   dob: { type: String },
   nikname: { type: String },
+  isActive : { type : Boolean , default : true } ,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   isContractor: { type: Boolean, default: false },

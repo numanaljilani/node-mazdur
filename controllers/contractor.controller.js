@@ -131,6 +131,50 @@ export const becomeContractor = async (req, res) => {
   }
 };
 
+export const updateIsActive = async (req, res) => {
+  try {
+    const { isActive } = req.body; // Allow sending true/false from frontend
+console.log("inside active and inactive ....")
+    // Validate input
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: "isActive field must be a boolean (true or false)"
+      });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { isActive },
+      { new: true, runValidators: true } // Return updated document + validate
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `User status updated successfully`,
+      user: {
+        id: updatedUser._id,
+        isActive: updatedUser.isActive,
+        // Add other fields if needed
+      }
+    });
+
+  } catch (error) {
+    console.error("Error while updating isActive:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while updating user status"
+    });
+  }
+};
+
 // Get contractors with pagination, search, and filters
 export const getContractors = async (req, res) => {
   try {
@@ -173,7 +217,7 @@ export const getContractors = async (req, res) => {
     }
 
     const contractors = await User.find(query)
-      .select("fullname bio image email phone address service locality rating  rewies")
+      .select("fullname bio image email phone address service locality rating  rewies isActive")
       .sort(sort)
       .limit(Number(limit))
       .skip((Number(page) - 1) * Number(limit))
