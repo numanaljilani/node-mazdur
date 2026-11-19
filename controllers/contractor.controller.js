@@ -186,7 +186,7 @@ export const getContractors = async (req, res) => {
       service,
       ratingOrder,
     } = req.query;
-    const query = { isContractor: true };
+    const query = { isContractor: true , isActive : true };
 
     // Search by fullname or email
     if (search) {
